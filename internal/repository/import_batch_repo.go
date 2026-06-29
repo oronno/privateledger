@@ -74,7 +74,9 @@ func (r *ImportBatchRepository) GetByID(batchID int) (*model.ImportBatch, error)
 		SELECT
 			ib.import_batch_id, ib.file_name, ib.account_id, ib.created_at,
 			ib.imported_transactions, ib.duplicate_transactions, ib.total_auto_categorized,
-			a.name as account_name
+			a.name as account_name,
+			(SELECT COUNT(*) FROM ledger_transaction
+			 WHERE import_batch_id = ib.import_batch_id AND category_source = 2) AS manually_categ_count
 		FROM import_batch ib
 		LEFT JOIN account a ON ib.account_id = a.account_id
 		WHERE ib.import_batch_id = ?
@@ -90,6 +92,7 @@ func (r *ImportBatchRepository) GetByID(batchID int) (*model.ImportBatch, error)
 		&batch.DuplicateTransactions,
 		&batch.TotalAutoCategorized,
 		&batch.AccountName,
+		&batch.ManuallyCategCount,
 	)
 
 	if err == sql.ErrNoRows {
@@ -108,7 +111,9 @@ func (r *ImportBatchRepository) GetAll() ([]*model.ImportBatch, error) {
 		SELECT
 			ib.import_batch_id, ib.file_name, ib.account_id, ib.created_at,
 			ib.imported_transactions, ib.duplicate_transactions, ib.total_auto_categorized,
-			a.name as account_name
+			a.name as account_name,
+			(SELECT COUNT(*) FROM ledger_transaction
+			 WHERE import_batch_id = ib.import_batch_id AND category_source = 2) AS manually_categ_count
 		FROM import_batch ib
 		LEFT JOIN account a ON ib.account_id = a.account_id
 		ORDER BY ib.created_at DESC
@@ -132,6 +137,7 @@ func (r *ImportBatchRepository) GetAll() ([]*model.ImportBatch, error) {
 			&batch.DuplicateTransactions,
 			&batch.TotalAutoCategorized,
 			&batch.AccountName,
+			&batch.ManuallyCategCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan import batch: %w", err)

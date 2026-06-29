@@ -99,6 +99,33 @@
     </div>
 </div>
 
+<!-- Revert Import Confirmation Modal -->
+<div class="modal fade" id="revertConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Revert Import</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-testid="revert-cancel-btn"></button>
+            </div>
+            <div class="modal-body">
+                <p>This will permanently delete <strong><span id="revertTxnCount">0</span> transactions</strong> from:</p>
+                <p class="fw-semibold" id="revertFileName"></p>
+                <div id="revertManualWarning" class="alert alert-warning py-2" style="display: none;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong><span id="revertManualCount">0</span> transactions</strong> were manually categorized and will also be deleted.
+                </div>
+                <p class="text-danger mb-0"><strong>This cannot be undone.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-testid="revert-cancel-btn">Cancel</button>
+                <button type="button" class="btn btn-danger" id="revertConfirmBtn" data-testid="revert-confirm-btn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Revert Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('ofxFile').addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'No file selected';
@@ -218,6 +245,8 @@ async function loadImportHistory() {
         }
 
         const batches = await response.json();
+        window._importBatchesCache = {};
+        batches.forEach(b => { window._importBatchesCache[b.import_batch_id] = b; });
 
         if (batches.length === 0) {
             historyContent.innerHTML = `
@@ -262,6 +291,11 @@ async function loadImportHistory() {
                                             <a href="/transactions?batch_id=${batch.import_batch_id}" class="btn btn-sm btn-outline-primary" title="View transactions">
                                                 <i class="bi bi-eye"></i>
                                             </a>
+                                            <button class="btn btn-sm btn-outline-danger ms-1" title="Revert import"
+                                                data-testid="revert-batch-btn-${batch.import_batch_id}"
+                                                onclick="confirmRevert(${batch.import_batch_id})">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                 `;
@@ -281,5 +315,44 @@ async function loadImportHistory() {
         historyLoading.style.display = 'none';
     }
 }
+
+let _pendingRevertBatchId = null;
+
+function confirmRevert(batchId) {
+    const batch = (window._importBatchesCache || {})[batchId];
+    if (!batch) return;
+    _pendingRevertBatchId = batchId;
+    document.getElementById('revertFileName').textContent = batch.file_name;
+    document.getElementById('revertTxnCount').textContent = batch.imported_transactions ?? 0;
+    const manualCount = batch.manually_categ_count ?? 0;
+    const warningEl = document.getElementById('revertManualWarning');
+    if (manualCount > 0) {
+        document.getElementById('revertManualCount').textContent = manualCount;
+        warningEl.style.display = '';
+    } else {
+        warningEl.style.display = 'none';
+    }
+    new bootstrap.Modal(document.getElementById('revertConfirmModal')).show();
+}
+
+document.getElementById('revertConfirmBtn').addEventListener('click', async function() {
+    if (!_pendingRevertBatchId) return;
+    this.disabled = true;
+    try {
+        const resp = await fetch(`/api/import/history/${_pendingRevertBatchId}`, { method: 'DELETE' });
+        if (resp.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('revertConfirmModal')).hide();
+            _pendingRevertBatchId = null;
+            loadImportHistory();
+        } else {
+            const data = await resp.json().catch(() => ({}));
+            alert(data.error || 'Failed to revert import');
+        }
+    } catch (e) {
+        alert('An error occurred while reverting the import');
+    } finally {
+        this.disabled = false;
+    }
+});
 </script>
 {{end}}

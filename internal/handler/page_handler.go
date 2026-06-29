@@ -223,6 +223,7 @@ func (h *PageHandler) Transactions(c *gin.Context) {
 		"Uncategorized": c.Query("uncategorized"),
 		"StartDate":     c.Query("start_date"),
 		"EndDate":       c.Query("end_date"),
+		"BatchID":       c.Query("batch_id"),
 	}
 
 	data := gin.H{

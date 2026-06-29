@@ -13,5 +13,6 @@ type ImportBatch struct {
 	TotalAutoCategorized  *int      `json:"total_auto_categorized"`
 
 	// Joined fields
-	AccountName string `json:"account_name,omitempty"`
+	AccountName        string `json:"account_name,omitempty"`
+	ManuallyCategCount int    `json:"manually_categ_count"`
 }

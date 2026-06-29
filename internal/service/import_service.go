@@ -143,3 +143,40 @@ func (s *ImportService) ImportOFX(reader io.Reader, accountID int, batchID *int)
 func (s *ImportService) ValidateOFX(reader io.Reader) error {
 	return s.parser.ValidateOFXFile(reader)
 }
+
+// RevertResult contains the results of an import revert operation
+type RevertResult struct {
+	BatchID             int    `json:"batch_id"`
+	FileName            string `json:"file_name"`
+	DeletedTransactions int    `json:"deleted_transactions"`
+}
+
+// RevertImport deletes all transactions belonging to a batch and then deletes the batch record.
+func (s *ImportService) RevertImport(batchID int) (*RevertResult, error) {
+	batch, err := s.batchRepo.GetByID(batchID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get import batch: %w", err)
+	}
+	if batch == nil {
+		return nil, fmt.Errorf("import batch not found: %d", batchID)
+	}
+
+	deleted, err := s.txnRepo.DeleteByBatchID(batchID)
+	if err != nil {
+		slog.Error("Failed to delete transactions for batch", slog.Int("batch_id", batchID), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("failed to delete transactions: %w", err)
+	}
+
+	if err := s.batchRepo.Delete(batchID); err != nil {
+		slog.Error("Failed to delete batch record", slog.Int("batch_id", batchID), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("failed to delete import batch: %w", err)
+	}
+
+	slog.Info("Import reverted", slog.Int("batch_id", batchID), slog.String("file_name", batch.FileName), slog.Int("deleted_transactions", deleted))
+
+	return &RevertResult{
+		BatchID:             batchID,
+		FileName:            batch.FileName,
+		DeletedTransactions: deleted,
+	}, nil
+}

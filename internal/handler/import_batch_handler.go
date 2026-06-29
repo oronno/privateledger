@@ -1,23 +1,27 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/oronno/privateledger/internal/model"
 	"github.com/oronno/privateledger/internal/repository"
+	"github.com/oronno/privateledger/internal/service"
 )
 
 // ImportBatchHandler handles import batch-related HTTP requests
 type ImportBatchHandler struct {
-	batchRepo *repository.ImportBatchRepository
+	batchRepo     *repository.ImportBatchRepository
+	importService *service.ImportService
 }
 
 // NewImportBatchHandler creates a new ImportBatchHandler
-func NewImportBatchHandler(batchRepo *repository.ImportBatchRepository) *ImportBatchHandler {
+func NewImportBatchHandler(batchRepo *repository.ImportBatchRepository, importService *service.ImportService) *ImportBatchHandler {
 	return &ImportBatchHandler{
-		batchRepo: batchRepo,
+		batchRepo:     batchRepo,
+		importService: importService,
 	}
 }
 
@@ -130,7 +134,7 @@ func (h *ImportBatchHandler) GetBatch(c *gin.Context) {
 	c.JSON(http.StatusOK, batch)
 }
 
-// DeleteBatch deletes an import batch by ID
+// DeleteBatch reverts an import batch by deleting all its transactions and then the batch record.
 // DELETE /api/import/history/:id
 func (h *ImportBatchHandler) DeleteBatch(c *gin.Context) {
 	idStr := c.Param("id")
@@ -140,10 +144,15 @@ func (h *ImportBatchHandler) DeleteBatch(c *gin.Context) {
 		return
 	}
 
-	if err := h.batchRepo.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete import batch"})
+	result, err := h.importService.RevertImport(id)
+	if err != nil {
+		if err.Error() == fmt.Sprintf("import batch not found: %d", id) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Import batch not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revert import batch"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Import batch deleted successfully"})
+	c.JSON(http.StatusOK, result)
 }

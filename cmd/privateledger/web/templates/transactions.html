@@ -6,6 +6,21 @@
     </div>
 </div>
 
+{{if .Filter.BatchID}}
+<div class="row mb-3">
+    <div class="col">
+        <div class="alert alert-info alert-dismissible d-flex align-items-center mb-0" data-testid="batch-revert-banner" id="batchRevertBanner">
+            <i class="bi bi-folder2-open me-2 flex-shrink-0"></i>
+            <span>Viewing import: <strong id="batchFileName">Loading...</strong></span>
+            <a href="#" class="ms-3 text-danger text-decoration-none" data-testid="batch-revert-link" onclick="openBatchRevertModal(); return false;">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Revert this import
+            </a>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+{{end}}
+
 <div class="row mb-4">
     <div class="col">
         <div class="card shadow-sm border-0" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
@@ -165,6 +180,35 @@
         </div>
     </div>
 </div>
+
+{{if .Filter.BatchID}}
+<!-- Revert Import Confirmation Modal (batch view) -->
+<div class="modal fade" id="batchRevertModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Revert Import</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>This will permanently delete <strong><span id="batchRevertTxnCount">-</span> transactions</strong> from:</p>
+                <p class="fw-semibold" id="batchRevertFileName"></p>
+                <div id="batchRevertManualWarning" class="alert alert-warning py-2" style="display: none;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong><span id="batchRevertManualCount">0</span> transactions</strong> were manually categorized and will also be deleted.
+                </div>
+                <p class="text-danger mb-0"><strong>This cannot be undone.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="batchRevertConfirmBtn" data-testid="revert-confirm-btn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Revert Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
 
 <!-- Change Category Modal -->
 <div class="modal fade" id="changeCategoryModal" tabindex="-1">
@@ -603,6 +647,58 @@ document.getElementById('changeCategoryForm').addEventListener('submit', async f
     // Update category
     await updateCategory(transactionId, categoryId, categoryName, categoryIcon, categoryColor);
 });
+
+{{if .Filter.BatchID}}
+(function() {
+    const batchId = parseInt('{{.Filter.BatchID}}', 10);
+    let batchInfo = null;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        try {
+            const resp = await fetch(`/api/import/history/${batchId}`);
+            if (resp.ok) {
+                batchInfo = await resp.json();
+                const nameEl = document.getElementById('batchFileName');
+                if (nameEl) nameEl.textContent = batchInfo.file_name;
+            }
+        } catch (e) {}
+    });
+
+    window.openBatchRevertModal = function() {
+        if (!batchInfo) return;
+        document.getElementById('batchRevertFileName').textContent = batchInfo.file_name;
+        document.getElementById('batchRevertTxnCount').textContent = batchInfo.imported_transactions ?? '-';
+        const manualCount = batchInfo.manually_categ_count ?? 0;
+        const warningEl = document.getElementById('batchRevertManualWarning');
+        if (manualCount > 0) {
+            document.getElementById('batchRevertManualCount').textContent = manualCount;
+            warningEl.style.display = '';
+        } else {
+            warningEl.style.display = 'none';
+        }
+        new bootstrap.Modal(document.getElementById('batchRevertModal')).show();
+    };
+
+    document.getElementById('batchRevertConfirmBtn').addEventListener('click', async function() {
+        if (!batchInfo) return;
+        this.disabled = true;
+        try {
+            const resp = await fetch(`/api/import/history/${batchId}`, { method: 'DELETE' });
+            if (resp.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('batchRevertModal')).hide();
+                window.location.href = '/transactions';
+            } else {
+                const data = await resp.json().catch(() => ({}));
+                showToast(data.error || 'Failed to revert import', 'danger');
+            }
+        } catch (e) {
+            showToast('An error occurred', 'danger');
+        } finally {
+            this.disabled = false;
+        }
+    });
+})();
+{{end}}
 
 document.getElementById('createPatternForm').addEventListener('submit', async function(e) {
     e.preventDefault();

@@ -101,7 +101,7 @@ func main() {
 	transactionHandler := handler.NewTransactionHandler(transactionRepo)
 	categoryHandler := handler.NewCategoryHandler(categoryRepo, patternRepo, categorizer)
 	importHandler := handler.NewImportHandler(importService)
-	importBatchHandler := handler.NewImportBatchHandler(importBatchRepo)
+	importBatchHandler := handler.NewImportBatchHandler(importBatchRepo, importService)
 	insightsHandler := handler.NewInsightsHandler(insightsService, accountRepo)
 	pageHandler := handler.NewPageHandler(embeddedFiles, accountRepo, transactionRepo, categoryRepo, patternRepo, insightsService, Version)
 

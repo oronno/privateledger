@@ -325,6 +325,22 @@ func (r *TransactionRepository) CountUncategorized() (int, error) {
 	return count, nil
 }
 
+// DeleteByBatchID deletes all transactions belonging to a given import batch and returns the count deleted.
+func (r *TransactionRepository) DeleteByBatchID(batchID int) (int, error) {
+	query := `DELETE FROM ledger_transaction WHERE import_batch_id = ?`
+	result, err := r.db.Exec(query, batchID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete transactions for batch %d: %w", batchID, err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return int(rows), nil
+}
+
 // Delete deletes a transaction by ID
 func (r *TransactionRepository) Delete(transactionID int) error {
 	query := `DELETE FROM ledger_transaction WHERE transaction_id = ?`
